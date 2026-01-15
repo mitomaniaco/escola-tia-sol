@@ -1,7 +1,67 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Wallet, Bell, BookOpen, Notebook } from 'lucide-react';
+import { Users, Wallet, BookOpen, Notebook, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        activeStudents: 0,
+        monthlyRevenue: 0,
+        pendingCharges: 0
+    });
+    const [notices, setNotices] = useState([]);
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+
+            // 1. Contar Alunos Ativos
+            const { count: studentCount } = await supabase
+                .from('students')
+                .select('*', { count: 'exact', head: true })
+                .eq('enrollment_status', 'active');
+
+            // 2. Financeiro (Buscamos tudo para calcular localmente por simplicidade)
+            // Em produção real faríamos query filtrada por data
+            const { data: charges } = await supabase
+                .from('financial_charges')
+                .select('amount, status, due_date');
+
+            const totalRevenue = charges
+                ?.filter(c => c.status === 'paid')
+                .reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+
+            const pendingCount = charges
+                ?.filter(c => c.status === 'pending' || c.status === 'overdue')
+                .length || 0;
+
+            // 3. Avisos Recentes
+            const { data: recentNotices } = await supabase
+                .from('notices')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(2);
+
+            setStats({
+                activeStudents: studentCount || 0,
+                monthlyRevenue: totalRevenue,
+                pendingCharges: pendingCount
+            });
+
+            setNotices(recentNotices || []);
+
+        } catch (error) {
+            console.error('Erro ao carregar dashboard:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div>
             <h1 className="text-2xl font-bold text-gray-800 mb-6">Visão Geral</h1>
@@ -10,26 +70,40 @@ export default function Dashboard() {
                 {/* Stats Cards */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
                     <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Alunos Ativos</h3>
-                    <p className="text-3xl font-bold text-gray-900">24</p>
-                    <div className="mt-4 flex items-center text-xs text-green-600 bg-green-50 w-max px-2 py-1 rounded-full">
-                        +2 esse mês
-                    </div>
+                    {loading ? <Loader2 className="animate-spin text-orange-500" /> : (
+                        <>
+                            <p className="text-3xl font-bold text-gray-900">{stats.activeStudents}</p>
+                            <div className="mt-4 flex items-center text-xs text-green-600 bg-green-50 w-max px-2 py-1 rounded-full">
+                                Atualizado agora
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-                    <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Faturamento (Mês)</h3>
-                    <p className="text-3xl font-bold text-gray-900">R$ 12.450,00</p>
-                    <div className="mt-4 flex items-center text-xs text-gray-500">
-                        Previsto: R$ 14.000
-                    </div>
+                    <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Receita Total (Recebida)</h3>
+                    {loading ? <Loader2 className="animate-spin text-green-500" /> : (
+                        <>
+                            <p className="text-3xl font-bold text-gray-900">
+                                R$ {stats.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                            <div className="mt-4 flex items-center text-xs text-gray-500">
+                                Acumulado
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-                    <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Pendências</h3>
-                    <p className="text-3xl font-bold text-gray-900">2</p>
-                    <div className="mt-4 flex items-center text-xs text-red-600 bg-red-50 w-max px-2 py-1 rounded-full">
-                        Atenção necessária
-                    </div>
+                    <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Cobranças Pendentes</h3>
+                    {loading ? <Loader2 className="animate-spin text-red-500" /> : (
+                        <>
+                            <p className="text-3xl font-bold text-gray-900">{stats.pendingCharges}</p>
+                            <div className="mt-4 flex items-center text-xs text-red-600 bg-red-50 w-max px-2 py-1 rounded-full">
+                                {stats.pendingCharges > 0 ? 'Atenção necessária' : 'Tudo em dia'}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -70,17 +144,28 @@ export default function Dashboard() {
                 <div className="md:w-80 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                     <h3 className="font-bold text-gray-800 mb-4">Avisos Recentes</h3>
                     <div className="space-y-4">
-                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                            <p className="text-sm text-blue-800 font-medium">Reunião de Pais</p>
-                            <p className="text-xs text-blue-600 mt-1">Sexta-feira, 14:00h</p>
-                        </div>
-                        <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
-                            <p className="text-sm text-orange-800 font-medium">Feriado - Carnaval</p>
-                            <p className="text-xs text-orange-600 mt-1">Escola fechada dias 12 e 13</p>
-                        </div>
+                        {notices.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">Nenhum aviso recente.</p>
+                        ) : (
+                            notices.map(notice => (
+                                <div key={notice.id} className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                    <p className="text-sm text-blue-800 font-medium">{notice.title}</p>
+                                    <p className="text-xs text-blue-600 mt-1">
+                                        {new Date(notice.created_at).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            ))
+                        )}
+                        {/* Fallback visual enquanto não criamos notices reais */}
+                        {notices.length === 0 && (
+                             <div className="p-4 bg-orange-50 rounded-xl border border-orange-100 opacity-50">
+                                <p className="text-sm text-orange-800 font-medium">Exemplo de Aviso</p>
+                                <p className="text-xs text-orange-600 mt-1">O mural está vazio.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
         </div>
-    )
+    );
 }

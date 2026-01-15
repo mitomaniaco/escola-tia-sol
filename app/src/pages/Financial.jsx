@@ -1,23 +1,100 @@
-import { useState } from 'react';
-import { Plus, Search, Filter, ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, MoreHorizontal, Copy, QrCode, MessageCircle, Mail, RefreshCw, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, Filter, ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, Copy, QrCode, MessageCircle, Mail, RefreshCw, X, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-const MOCK_INVOICES = [
-    { id: 1, student: 'Alice Silva', description: 'Mensalidade Março/2026', amount: 850.00, dueDate: '2026-03-10', status: 'paid' },
-    { id: 2, student: 'Bruno Santos', description: 'Mensalidade Março/2026', amount: 850.00, dueDate: '2026-03-10', status: 'pending' },
-    { id: 3, student: 'Carla Dias', description: 'Material Didático', amount: 250.00, dueDate: '2026-03-05', status: 'overdue' },
-    { id: 4, student: 'Daniel Oliveira', description: 'Mensalidade Março/2026', amount: 850.00, dueDate: '2026-03-10', status: 'pending' },
-];
+import { supabase } from '../lib/supabase';
+import { format } from 'date-fns';
 
 export default function Financial() {
+    const [charges, setCharges] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('income'); // income | expense
     const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        if (activeTab === 'income') {
+            fetchCharges();
+        }
+    }, [activeTab]);
+
+    const fetchCharges = async () => {
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('financial_charges')
+                .select(`
+                    *,
+                    students (name),
+                    guardians (name)
+                `)
+                .order('due_date', { ascending: false });
+
+            if (error) throw error;
+            setCharges(data || []);
+        } catch (error) {
+            console.error('Erro ao buscar cobranças:', error);
+            alert('Erro ao carregar dados financeiros');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Cálculos para os Cards (Dashboard rápido)
+    const stats = {
+        received: charges.filter(c => c.status === 'paid').reduce((acc, curr) => acc + Number(curr.amount), 0),
+        pending: charges.filter(c => c.status === 'pending').reduce((acc, curr) => acc + Number(curr.amount), 0),
+        overdue: charges.filter(c => c.status === 'overdue').reduce((acc, curr) => acc + Number(curr.amount), 0),
+    };
+
+    const filtered = charges.filter(c => {
+        const search = searchTerm.toLowerCase();
+        return (
+            c.title.toLowerCase().includes(search) ||
+            c.students?.name.toLowerCase().includes(search) ||
+            c.guardians?.name.toLowerCase().includes(search)
+        );
+    });
+
+    const handleCancel = async (id) => {
+        if (!confirm('Tem certeza que deseja cancelar esta cobrança?')) return;
+        try {
+            const { error } = await supabase
+                .from('financial_charges')
+                .update({ status: 'cancelled' })
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchCharges(); // Recarrega
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao cancelar cobrança');
+        }
+    };
+
+    const handleMarkAsPaid = async (id) => {
+        if (!confirm('Confirmar recebimento manual desta cobrança?')) return;
+        try {
+            const { error } = await supabase
+                .from('financial_charges')
+                .update({
+                    status: 'paid',
+                    paid_at: new Date().toISOString()
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchCharges();
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao atualizar status');
+        }
+    };
 
     const getStatusColor = (status) => {
         switch (status) {
             case 'paid': return 'bg-green-100 text-green-700';
             case 'pending': return 'bg-yellow-100 text-yellow-700';
             case 'overdue': return 'bg-red-100 text-red-700';
+            case 'cancelled': return 'bg-gray-100 text-gray-500 line-through';
             default: return 'bg-gray-100 text-gray-600';
         }
     };
@@ -27,6 +104,7 @@ export default function Financial() {
             case 'paid': return 'Pago';
             case 'pending': return 'Pendente';
             case 'overdue': return 'Atrasado';
+            case 'cancelled': return 'Cancelado';
             default: return status;
         }
     };
@@ -63,8 +141,10 @@ export default function Financial() {
                         <ArrowUpCircle size={24} />
                     </div>
                     <div>
-                        <p className="text-sm text-gray-500 font-medium">Recebidos (Mês)</p>
-                        <h3 className="text-2xl font-bold text-gray-800">R$ 12.450,00</h3>
+                        <p className="text-sm text-gray-500 font-medium">Recebidos (Total)</p>
+                        <h3 className="text-2xl font-bold text-gray-800">
+                            R$ {stats.received.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </h3>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -73,7 +153,9 @@ export default function Financial() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">A Receber</p>
-                        <h3 className="text-2xl font-bold text-gray-800">R$ 5.800,00</h3>
+                        <h3 className="text-2xl font-bold text-gray-800">
+                            R$ {stats.pending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </h3>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -82,7 +164,9 @@ export default function Financial() {
                     </div>
                     <div>
                         <p className="text-sm text-gray-500 font-medium">Em Atraso</p>
-                        <h3 className="text-2xl font-bold text-gray-800">R$ 850,00</h3>
+                        <h3 className="text-2xl font-bold text-gray-800">
+                            R$ {stats.overdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </h3>
                     </div>
                 </div>
             </div>
@@ -138,71 +222,79 @@ export default function Financial() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {MOCK_INVOICES.map(inv => (
-                                    <tr key={inv.id} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="p-4 font-medium text-gray-900">{inv.student}</td>
-                                        <td className="p-4 text-gray-600">{inv.description}</td>
-                                        <td className="p-4 text-gray-600">{new Date(inv.dueDate).toLocaleDateString()}</td>
-                                        <td className="p-4 font-medium text-gray-900">R$ {inv.amount.toFixed(2)}</td>
-                                        <td className="p-4">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(inv.status)}`}>
-                                                {getStatusLabel(inv.status)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {inv.status === 'pending' ? (
-                                                    <>
-                                                        <button
-                                                            onClick={() => alert('Link Pix copiado para a área de transferência! 📋')}
-                                                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
-                                                            title="Copiar Link Pix"
-                                                        >
-                                                            <Copy size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => alert('Abrindo QR Code e Detalhes do Pix... 📱')}
-                                                            className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors border border-transparent hover:border-purple-100"
-                                                            title="Detalhes / QR Code"
-                                                        >
-                                                            <QrCode size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => window.open('https://wa.me/?text=Olá, segue o link de pagamento: https://pix.example.com/123', '_blank')}
-                                                            className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100"
-                                                            title="Enviar por WhatsApp"
-                                                        >
-                                                            <MessageCircle size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => alert('Email de cobrança enviado! ✉️')}
-                                                            className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors border border-transparent hover:border-orange-100"
-                                                            title="Enviar por Email"
-                                                        >
-                                                            <Mail size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => alert('Atualizando status junto ao banco... 🔄')}
-                                                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
-                                                            title="Consultar Situação"
-                                                        >
-                                                            <RefreshCw size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => confirm('Tem certeza que deseja cancelar esta cobrança?') && alert('Cobrança cancelada.')}
-                                                            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                                                            title="Cancelar Cobrança"
-                                                        >
-                                                            <X size={16} />
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400 italic px-2">Concluído</span>
-                                                )}
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan="6" className="p-8 text-center text-gray-500">
+                                            <div className="flex justify-center items-center gap-2">
+                                                <Loader2 className="animate-spin" /> Carregando financeiro...
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                ) : filtered.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="6" className="p-8 text-center text-gray-500">
+                                            Nenhuma cobrança encontrada.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filtered.map(charge => (
+                                        <tr key={charge.id} className="hover:bg-gray-50/50 transition-colors">
+                                            <td className="p-4 font-medium text-gray-900">
+                                                {charge.students?.name || 'Aluno Excluído'}
+                                            </td>
+                                            <td className="p-4 text-gray-600">{charge.title}</td>
+                                            <td className="p-4 text-gray-600">{new Date(charge.due_date).toLocaleDateString()}</td>
+                                            <td className="p-4 font-medium text-gray-900">
+                                                R$ {Number(charge.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(charge.status)}`}>
+                                                    {getStatusLabel(charge.status)}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {['pending', 'overdue'].includes(charge.status) ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => alert('Em breve: Copia Chave Pix do Asaas/Banco')}
+                                                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                                                                title="Copiar Link Pix"
+                                                            >
+                                                                <Copy size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => window.open(`https://wa.me/?text=Olá, segue cobrança escolar: ${charge.title} - Valor R$ ${charge.amount}`, '_blank')}
+                                                                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100"
+                                                                title="Enviar por WhatsApp"
+                                                            >
+                                                                <MessageCircle size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleMarkAsPaid(charge.id)}
+                                                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                                                                title="Marcar como Pago (Manual)"
+                                                            >
+                                                                <RefreshCw size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleCancel(charge.id)}
+                                                                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                                title="Cancelar Cobrança"
+                                                            >
+                                                                <X size={16} />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 italic px-2">
+                                                            {charge.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     ) : (

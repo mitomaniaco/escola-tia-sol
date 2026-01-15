@@ -1,19 +1,47 @@
-import { useState } from 'react';
-import { Plus, Search, MoreHorizontal, Users, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, Clock, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-const MOCK_CLASSES = [
-    { id: 1, name: 'Berçário I', shift: 'Integral', capacity: 10, enrolled: 8, teacher: 'Tia Ana' },
-    { id: 2, name: 'Berçário I', shift: 'Tarde', capacity: 12, enrolled: 5, teacher: 'Tia Ju' },
-    { id: 3, name: 'Jardim I', shift: 'Manhã', capacity: 15, enrolled: 12, teacher: 'Tia Carol' },
-    { id: 4, name: 'Jardim I', shift: 'Tarde', capacity: 15, enrolled: 10, teacher: 'Tia Carol' },
-];
+import { supabase } from '../lib/supabase';
 
 export default function Classes() {
+    const [classes, setClasses] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
+    useEffect(() => {
+        fetchClasses();
+    }, []);
+
+    const fetchClasses = async () => {
+        try {
+            setLoading(true);
+            // Busca turmas e conta quantos alunos estão ativos nessa turma
+            const { data, error } = await supabase
+                .from('classes')
+                .select(`
+                    *,
+                    students (count)
+                `)
+                .order('name');
+
+            if (error) throw error;
+
+            // Transforma o resultado para facilitar uso (count vem como array/objeto)
+            const formatted = data.map(cls => ({
+                ...cls,
+                enrolled: cls.students?.[0]?.count || 0
+            }));
+
+            setClasses(formatted);
+        } catch (error) {
+            console.error('Erro ao buscar turmas:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Grouping logic: object where keys are class names
-    const groupedClasses = MOCK_CLASSES.reduce((acc, cls) => {
+    const groupedClasses = classes.reduce((acc, cls) => {
         if (!acc[cls.name]) {
             acc[cls.name] = [];
         }
@@ -24,6 +52,15 @@ export default function Classes() {
     const filteredGroupNames = Object.keys(groupedClasses).filter(name =>
         name.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const translateShift = (shift) => {
+        const map = {
+            'morning': 'Matutino',
+            'afternoon': 'Vespertino',
+            'full_time': 'Integral'
+        };
+        return map[shift] || shift;
+    };
 
     return (
         <div>
@@ -56,57 +93,68 @@ export default function Classes() {
                 </div>
 
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                    {filteredGroupNames.map(groupName => {
-                        const classesInGroup = groupedClasses[groupName];
-                        const totalStudents = classesInGroup.reduce((sum, c) => sum + c.enrolled, 0);
-                        const totalCapacity = classesInGroup.reduce((sum, c) => sum + c.capacity, 0);
+                    {loading ? (
+                        <div className="col-span-full flex justify-center py-10">
+                            <Loader2 className="animate-spin text-orange-500" size={32} />
+                        </div>
+                    ) : filteredGroupNames.length === 0 ? (
+                         <div className="col-span-full text-center py-10 text-gray-500">
+                            Nenhuma turma cadastrada.
+                        </div>
+                    ) : (
+                        filteredGroupNames.map(groupName => {
+                            const classesInGroup = groupedClasses[groupName];
+                            const totalStudents = classesInGroup.reduce((sum, c) => sum + c.enrolled, 0);
+                            const totalCapacity = classesInGroup.reduce((sum, c) => sum + c.capacity, 0);
 
-                        return (
-                            <div key={groupName} className="border border-gray-100 rounded-xl p-5 hover:border-orange-200 transition-colors bg-white">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 className="font-bold text-gray-800 text-lg">{groupName}</h3>
-                                        <p className="text-xs text-gray-500">{classesInGroup.length} turnos ativos</p>
-                                    </div>
-                                    <div className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
-                                        {totalStudents} alunos total
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    {classesInGroup.map(cls => (
-                                        <div key={cls.id} className="bg-gray-50 rounded-lg p-3 flex flex-col gap-2">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                                                    <Clock size={14} className="text-gray-400" />
-                                                    {cls.shift}
-                                                </span>
-                                                <span className="text-xs text-gray-500">{cls.teacher}</span>
-                                            </div>
-
-                                            <div className="flex items-center gap-2">
-                                                <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                                                    <div
-                                                        className="bg-green-500 h-1.5 rounded-full"
-                                                        style={{ width: `${(cls.enrolled / cls.capacity) * 100}%` }}
-                                                    ></div>
-                                                </div>
-                                                <span className="text-xs text-gray-600 w-12 text-right">{cls.enrolled}/{cls.capacity}</span>
-                                            </div>
+                            return (
+                                <div key={groupName} className="border border-gray-100 rounded-xl p-5 hover:border-orange-200 transition-colors bg-white">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-gray-800 text-lg">{groupName}</h3>
+                                            <p className="text-xs text-gray-500">{classesInGroup.length} turnos ativos</p>
                                         </div>
-                                    ))}
+                                        <div className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
+                                            {totalStudents} alunos total
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {classesInGroup.map(cls => (
+                                            <div key={cls.id} className="bg-gray-50 rounded-lg p-3 flex flex-col gap-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                                        <Clock size={14} className="text-gray-400" />
+                                                        {translateShift(cls.shift)}
+                                                    </span>
+                                                    {/* Professor será implementado depois com tabela staff */}
+                                                    <span className="text-xs text-gray-500">--</span>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                                        <div
+                                                            className="bg-green-500 h-1.5 rounded-full"
+                                                            style={{ width: `${(cls.enrolled / cls.capacity) * 100}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-xs text-gray-600 w-12 text-right">{cls.enrolled}/{cls.capacity}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+                                        <button
+                                            onClick={() => alert(`Funcionalidade detalhada em breve`)}
+                                            className="text-sm text-orange-600 font-medium hover:text-orange-700"
+                                        >
+                                            Ver Detalhes
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
-                                    <button
-                                        onClick={() => alert(`Visualizando detalhes da turma: ${groupName}`)}
-                                        className="text-sm text-orange-600 font-medium hover:text-orange-700"
-                                    >
-                                        Ver Detalhes
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })
+                    )}
                 </div>
             </div>
         </div>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext({});
 
@@ -7,38 +8,33 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Mock session restoration
-        const restored = localStorage.getItem('escola-user');
-        if (restored) {
-            try {
-                setUser(JSON.parse(restored));
-            } catch (e) {
-                console.error("Failed to parse user", e);
-            }
-        }
-        setLoading(false);
+        // Verifica sessão atual ao carregar
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setUser(session?.user ?? null);
+            setLoading(false);
+        });
+
+        // Escuta mudanças na autenticação (login, logout, refresh)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+            setLoading(false);
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const login = async (email, password) => {
-        // Mock login logic
-        // In real implementation, this would call Supabase
-        if (email === 'admin@escola.com' && password === 'admin') {
-            const mockUser = {
-                id: '1',
-                email,
-                name: 'Tia Sol (Admin)',
-                role: 'admin'
-            };
-            setUser(mockUser);
-            localStorage.setItem('escola-user', JSON.stringify(mockUser));
-            return { data: { user: mockUser }, error: null };
-        }
-        return { data: null, error: { message: 'Credenciais inválidas. Tente admin@escola.com / admin' } };
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+        return { data, error };
     };
 
-    const logout = () => {
-        setUser(null);
-        localStorage.removeItem('escola-user');
+    const logout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.error("Erro ao sair:", error);
+        // O onAuthStateChange já vai atualizar o user, mas podemos forçar null aqui se quisermos
     };
 
     return (

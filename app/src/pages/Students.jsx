@@ -1,38 +1,115 @@
-import { useState } from 'react';
-import { Plus, Search, MoreHorizontal, User, Edit, Trash2, X, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, User, Edit, Trash2, X, Save, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-const MOCK_STUDENTS = [
-    { id: 1, name: 'Alice Silva', age: 3, guardian: 'Mariana Silva', status: 'active' },
-    { id: 2, name: 'Bruno Santos', age: 4, guardian: 'Roberto Santos', status: 'active' },
-    { id: 3, name: 'Carla Dias', age: 2, guardian: 'Fernanda Dias', status: 'inactive' },
-];
+import { supabase } from '../lib/supabase';
+import { format } from 'date-fns';
 
 export default function Students() {
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState(null);
 
-    const filtered = MOCK_STUDENTS.filter(s =>
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.guardian.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Carregar alunos ao montar
+    useEffect(() => {
+        fetchStudents();
+    }, []);
+
+    const fetchStudents = async () => {
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('students')
+                .select(`
+                    *,
+                    student_guardians (
+                        guardians (name)
+                    )
+                `)
+                .order('name');
+
+            if (error) throw error;
+            setStudents(data || []);
+        } catch (error) {
+            console.error('Erro ao buscar alunos:', error);
+            alert('Erro ao carregar lista de alunos');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const filtered = students.filter(s => {
+        const studentName = s.name?.toLowerCase() || '';
+        // Verifica se algum responsável combina com a busca
+        const guardianNames = s.student_guardians?.map(sg => sg.guardians?.name).join(' ').toLowerCase() || '';
+        const search = searchTerm.toLowerCase();
+
+        return studentName.includes(search) || guardianNames.includes(search);
+    });
 
     const handleEdit = (student) => {
         setSelectedStudent(student);
         setIsModalOpen(true);
     };
 
-    const handleDelete = (id) => {
-        if (confirm('Tem certeza que deseja desativar este aluno?')) {
-            alert('Aluno desativado com sucesso (Simulação)');
+    const handleDelete = async (id) => {
+        if (!confirm('Tem certeza que deseja excluir este aluno? Esta ação não pode ser desfeita.')) return;
+
+        try {
+            const { error } = await supabase
+                .from('students')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setStudents(prev => prev.filter(s => s.id !== id));
+            alert('Aluno excluído com sucesso');
+        } catch (error) {
+            console.error('Erro ao excluir:', error);
+            alert('Erro ao excluir aluno');
         }
     };
 
-    const handleSave = (e) => {
+    const handleSave = async (e) => {
         e.preventDefault();
-        alert('Dados do aluno atualizados! (Simulação)');
-        setIsModalOpen(false);
+        try {
+            // Atualização simples no modal (apenas nome e status por enquanto)
+            const updates = {
+                name: e.target.name.value,
+                // Age é calculado via birth_date no banco, mas aqui estamos editando direto por simplicidade se houvesse campo
+                // birth_date: ... (melhor implementar no full edit)
+                enrollment_status: e.target.status.value
+            };
+
+            const { error } = await supabase
+                .from('students')
+                .update(updates)
+                .eq('id', selectedStudent.id);
+
+            if (error) throw error;
+
+            alert('Dados atualizados com sucesso!');
+            setIsModalOpen(false);
+            fetchStudents(); // Recarrega para garantir consistência
+        } catch (error) {
+            console.error('Erro ao atualizar:', error);
+            alert('Erro ao salvar alterações');
+        }
+    };
+
+    // Helper para calcular idade (aproximada)
+    const calculateAge = (birthDate) => {
+        if (!birthDate) return '-';
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        return age;
     };
 
     return (
@@ -71,52 +148,79 @@ export default function Students() {
                             <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
                                 <th className="p-4 font-semibold">Aluno</th>
                                 <th className="p-4 font-semibold">Idade</th>
-                                <th className="p-4 font-semibold">Responsável</th>
+                                <th className="p-4 font-semibold">Responsáveis</th>
                                 <th className="p-4 font-semibold">Status</th>
                                 <th className="p-4 font-semibold text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {filtered.map(student => (
-                                <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-                                                <User size={16} />
-                                            </div>
-                                            <span className="font-medium text-gray-900">{student.name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="p-4 text-gray-600">{student.age} anos</td>
-                                    <td className="p-4 text-gray-600">{student.guardian}</td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${student.status === 'active'
-                                            ? 'bg-green-100 text-green-700'
-                                            : 'bg-gray-100 text-gray-600'
-                                            }`}>
-                                            {student.status === 'active' ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <button
-                                                onClick={() => handleEdit(student)}
-                                                className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
-                                                title="Editar"
-                                            >
-                                                <Edit size={18} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(student.id)}
-                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="Excluir"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="5" className="p-8 text-center text-gray-500">
+                                        <div className="flex justify-center items-center gap-2">
+                                            <Loader2 className="animate-spin" /> Carregando alunos...
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            ) : filtered.length === 0 ? (
+                                <tr>
+                                    <td colSpan="5" className="p-8 text-center text-gray-500">
+                                        Nenhum aluno encontrado.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filtered.map(student => (
+                                    <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-3">
+                                                {student.photo_url ? (
+                                                    <img src={student.photo_url} alt={student.name} className="w-8 h-8 rounded-full object-cover" />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                                                        <User size={16} />
+                                                    </div>
+                                                )}
+                                                <span className="font-medium text-gray-900">{student.name}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-gray-600">{calculateAge(student.birth_date)} anos</td>
+                                        <td className="p-4 text-gray-600">
+                                            {student.student_guardians?.length > 0
+                                                ? student.student_guardians.map(sg => sg.guardians?.name).join(', ')
+                                                : <span className="text-gray-400 italic">Sem vínculo</span>
+                                            }
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                student.enrollment_status === 'active' ? 'bg-green-100 text-green-700' :
+                                                student.enrollment_status === 'inactive' ? 'bg-red-100 text-red-700' :
+                                                'bg-yellow-100 text-yellow-700'
+                                            }`}>
+                                                {student.enrollment_status === 'active' ? 'Ativo' :
+                                                 student.enrollment_status === 'inactive' ? 'Inativo' : 'Pendente'}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleEdit(student)}
+                                                    className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
+                                                    title="Editar Rápido"
+                                                >
+                                                    <Edit size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(student.id)}
+                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -137,27 +241,24 @@ export default function Students() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
                                 <input
                                     type="text"
+                                    name="name"
                                     defaultValue={selectedStudent.name}
                                     className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none transition-all"
+                                    required
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Idade</label>
-                                    <input
-                                        type="number"
-                                        defaultValue={selectedStudent.age}
-                                        className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none transition-all"
-                                    />
-                                </div>
+                                {/* Removido Idade editável aqui pois agora depende da data de nascimento. Ideal seria um datepicker */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                                     <select
-                                        defaultValue={selectedStudent.status}
+                                        name="status"
+                                        defaultValue={selectedStudent.enrollment_status}
                                         className="w-full p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none transition-all bg-white"
                                     >
                                         <option value="active">Ativo</option>
                                         <option value="inactive">Inativo</option>
+                                        <option value="pending">Pendente</option>
                                     </select>
                                 </div>
                             </div>
