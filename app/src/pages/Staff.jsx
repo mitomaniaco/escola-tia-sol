@@ -1,18 +1,52 @@
-import { useState } from 'react';
-import { Plus, Search, MoreHorizontal, UserCheck, Phone } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, MoreHorizontal, UserCheck, Phone, Loader2, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-const MOCK_STAFF = [
-    { id: 1, name: 'Tia Ana', role: 'Professora', phone: '(11) 99999-1111', status: 'active' },
-    { id: 2, name: 'Tia Ju', role: 'Monitora', phone: '(11) 98888-2222', status: 'active' },
-    { id: 3, name: 'Tio Leo', role: 'Recreador', phone: '(11) 97777-3333', status: 'active' },
-    { id: 4, name: 'Solange (Tia Sol)', role: 'Gerente', phone: '(11) 96666-4444', status: 'active' },
-];
+import { supabase } from '../lib/supabase';
 
 export default function Staff() {
+    const [staff, setStaff] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const filtered = MOCK_STAFF.filter(s =>
+    useEffect(() => {
+        fetchStaff();
+    }, []);
+
+    const fetchStaff = async () => {
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('staff')
+                .select('*')
+                .order('name');
+
+            if (error) throw error;
+            setStaff(data || []);
+        } catch (error) {
+            console.error('Erro ao buscar funcionários:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm('Tem certeza que deseja excluir este funcionário?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('staff')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            setStaff(prev => prev.filter(s => s.id !== id));
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao excluir funcionário');
+        }
+    };
+
+    const filtered = staff.filter(s =>
         s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.role.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -59,40 +93,61 @@ export default function Staff() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {filtered.map(person => (
-                                <tr key={person.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
-                                                <UserCheck size={16} />
-                                            </div>
-                                            <span className="font-medium text-gray-900">{person.name}</span>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="5" className="p-8 text-center text-gray-500">
+                                        <div className="flex justify-center items-center gap-2">
+                                            <Loader2 className="animate-spin" /> Carregando equipe...
                                         </div>
                                     </td>
-                                    <td className="p-4 text-gray-600">{person.role}</td>
-                                    <td className="p-4 text-gray-600 flex items-center gap-2">
-                                        <Phone size={14} className="text-gray-400" />
-                                        {person.phone}
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${person.status === 'active'
-                                            ? 'bg-green-100 text-green-700'
-                                            : 'bg-gray-100 text-gray-600'
-                                            }`}>
-                                            {person.status === 'active' ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <button
-                                            onClick={() => alert(`Editando funcionário: ${person.name}`)}
-                                            className="text-gray-400 hover:text-purple-600 transition-colors cursor-pointer"
-                                            title="Editar"
-                                        >
-                                            <MoreHorizontal size={20} />
-                                        </button>
+                                </tr>
+                            ) : filtered.length === 0 ? (
+                                <tr>
+                                    <td colSpan="5" className="p-8 text-center text-gray-500">
+                                        Nenhum funcionário encontrado.
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                filtered.map(person => (
+                                    <tr key={person.id} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                                                    <UserCheck size={16} />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-gray-900">{person.name}</span>
+                                                    <span className="text-xs text-gray-400">{person.email}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-gray-600">{person.role}</td>
+                                        <td className="p-4 text-gray-600 flex items-center gap-2">
+                                            <Phone size={14} className="text-gray-400" />
+                                            {person.phone}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${person.status === 'active'
+                                                ? 'bg-green-100 text-green-700'
+                                                : person.status === 'vacation' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                {person.status === 'active' ? 'Ativo' : person.status === 'vacation' ? 'Férias' : 'Inativo'}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleDelete(person.id)}
+                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

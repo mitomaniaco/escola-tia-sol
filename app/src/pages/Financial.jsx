@@ -5,33 +5,35 @@ import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 
 export default function Financial() {
-    const [charges, setCharges] = useState([]);
+    const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('income'); // income | expense
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        if (activeTab === 'income') {
-            fetchCharges();
-        }
+        fetchRecords();
     }, [activeTab]);
 
-    const fetchCharges = async () => {
+    const fetchRecords = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('financial_charges')
+
+            let query = supabase
+                .from('financial_records')
                 .select(`
                     *,
                     students (name),
                     guardians (name)
                 `)
+                .eq('type', activeTab) // 'income' or 'expense'
                 .order('due_date', { ascending: false });
 
+            const { data, error } = await query;
+
             if (error) throw error;
-            setCharges(data || []);
+            setRecords(data || []);
         } catch (error) {
-            console.error('Erro ao buscar cobranças:', error);
+            console.error('Erro ao buscar registros:', error);
             alert('Erro ao carregar dados financeiros');
         } finally {
             setLoading(false);
@@ -40,41 +42,42 @@ export default function Financial() {
 
     // Cálculos para os Cards (Dashboard rápido)
     const stats = {
-        received: charges.filter(c => c.status === 'paid').reduce((acc, curr) => acc + Number(curr.amount), 0),
-        pending: charges.filter(c => c.status === 'pending').reduce((acc, curr) => acc + Number(curr.amount), 0),
-        overdue: charges.filter(c => c.status === 'overdue').reduce((acc, curr) => acc + Number(curr.amount), 0),
+        received: records.filter(c => c.status === 'paid').reduce((acc, curr) => acc + Number(curr.amount), 0),
+        pending: records.filter(c => c.status === 'pending').reduce((acc, curr) => acc + Number(curr.amount), 0),
+        overdue: records.filter(c => c.status === 'overdue').reduce((acc, curr) => acc + Number(curr.amount), 0),
     };
 
-    const filtered = charges.filter(c => {
+    const filtered = records.filter(c => {
         const search = searchTerm.toLowerCase();
         return (
             c.title.toLowerCase().includes(search) ||
+            c.description?.toLowerCase().includes(search) ||
             c.students?.name.toLowerCase().includes(search) ||
             c.guardians?.name.toLowerCase().includes(search)
         );
     });
 
     const handleCancel = async (id) => {
-        if (!confirm('Tem certeza que deseja cancelar esta cobrança?')) return;
+        if (!confirm('Tem certeza que deseja cancelar este registro?')) return;
         try {
             const { error } = await supabase
-                .from('financial_charges')
+                .from('financial_records')
                 .update({ status: 'cancelled' })
                 .eq('id', id);
 
             if (error) throw error;
-            fetchCharges(); // Recarrega
+            fetchRecords(); // Recarrega
         } catch (error) {
             console.error(error);
-            alert('Erro ao cancelar cobrança');
+            alert('Erro ao cancelar registro');
         }
     };
 
     const handleMarkAsPaid = async (id) => {
-        if (!confirm('Confirmar recebimento manual desta cobrança?')) return;
+        if (!confirm('Confirmar liquidação deste registro?')) return;
         try {
             const { error } = await supabase
-                .from('financial_charges')
+                .from('financial_records')
                 .update({
                     status: 'paid',
                     paid_at: new Date().toISOString()
@@ -82,7 +85,7 @@ export default function Financial() {
                 .eq('id', id);
 
             if (error) throw error;
-            fetchCharges();
+            fetchRecords();
         } catch (error) {
             console.error(error);
             alert('Erro ao atualizar status');

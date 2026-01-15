@@ -4,8 +4,8 @@ import { Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
-    const [email, setEmail] = useState('admin@escola.com');
-    const [password, setPassword] = useState('admin');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const { login } = useAuth();
     const navigate = useNavigate();
@@ -45,7 +45,7 @@ export default function Login() {
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none transition-all"
-                                placeholder="admin@escola.com"
+                                placeholder="seu@email.com"
                             />
                         </div>
                         <div>
@@ -55,7 +55,7 @@ export default function Login() {
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none transition-all"
-                                placeholder="••••••"
+                                placeholder="Sua senha"
                             />
                         </div>
                         <button

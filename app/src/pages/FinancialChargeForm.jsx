@@ -63,15 +63,17 @@ export default function FinancialChargeForm() {
 
             // 2. Criar Cobrança
             const { error } = await supabase
-                .from('financial_charges')
+                .from('financial_records')
                 .insert({
                     student_id: formData.student_id,
                     guardian_id: payerId,
                     title: formData.title,
+                    description: formData.notes, // Agora mapeia notes para description
                     amount: parseFloat(formData.amount),
                     due_date: formData.due_date,
                     status: 'pending',
-                    // notes: formData.notes (campo não existe no schema atual, ignorar ou concatenar)
+                    type: 'income', // Importante: define como receita
+                    category: 'tuition' // Default category
                 });
 
             if (error) throw error;
