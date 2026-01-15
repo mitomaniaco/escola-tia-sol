@@ -19,12 +19,28 @@ import Notices from './pages/Notices';
 import NoticeForm from './pages/NoticeForm';
 import Layout from './Layout';
 
+import PortalLayout from './pages/portal/PortalLayout';
+import PortalDashboard from './pages/portal/PortalDashboard';
+import PortalFinancial from './pages/portal/PortalFinancial';
+import PortalDiary from './pages/portal/PortalDiary';
+import PortalNotices from './pages/portal/PortalNotices';
+
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, role, loading } = useAuth();
 
   if (loading) return <div className="flex items-center justify-center h-screen bg-orange-50 text-orange-500 animate-pulse">Carregando...</div>;
 
   if (!user) return <Navigate to="/login" />;
+
+  // Se for pai tentando acessar área admin, manda pro portal
+  if (role === 'guardian' && !window.location.pathname.startsWith('/portal')) {
+      return <Navigate to="/portal" replace />;
+  }
+
+  // Se for admin tentando acessar portal (opcional, mas bom pra separar)
+  // if (role !== 'guardian' && window.location.pathname.startsWith('/portal')) {
+  //     return <Navigate to="/" replace />;
+  // }
 
   return children;
 }
@@ -32,10 +48,9 @@ function ProtectedRoute({ children }) {
 function RequireRole({ children, allowedRoles }) {
   const { role, loading } = useAuth();
 
-  if (loading) return null; // Or spinner
+  if (loading) return null;
 
   if (!allowedRoles.includes(role)) {
-    // Redireciona para dashboard se não tiver permissão
     return <Navigate to="/" replace />;
   }
 
@@ -47,6 +62,19 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
 
+      {/* Área dos Pais (Portal) */}
+      <Route path="/portal" element={
+        <ProtectedRoute>
+          <PortalLayout />
+        </ProtectedRoute>
+      }>
+        <Route index element={<PortalDashboard />} />
+        <Route path="financial" element={<PortalFinancial />} />
+        <Route path="diary" element={<PortalDiary />} />
+        <Route path="notices" element={<PortalNotices />} />
+      </Route>
+
+      {/* Área Administrativa (Escola) */}
       <Route path="/" element={
         <ProtectedRoute>
           <Layout />

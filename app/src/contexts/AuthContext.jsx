@@ -9,27 +9,38 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Função para buscar o perfil na tabela staff
+        // Função para buscar o perfil na tabela staff ou guardians
         const fetchRole = async (email) => {
             if (!email) return null;
             try {
-                // Busca na tabela staff pelo email
-                const { data, error } = await supabase
+                // 1. Tenta buscar na tabela STAFF
+                const { data: staffData } = await supabase
                     .from('staff')
                     .select('role')
                     .eq('email', email)
-                    .single();
+                    .maybeSingle(); // maybeSingle não joga erro se não achar
 
-                if (data) {
-                    // Mapeia cargos para permissões
+                if (staffData) {
                     const adminRoles = ['Gerente', 'Diretora', 'Coordenadora'];
-                    return adminRoles.includes(data.role) ? 'admin' : 'teacher';
+                    return adminRoles.includes(staffData.role) ? 'admin' : 'teacher';
                 }
-                // Se não achar no staff, assume admin se for o primeiro usuário ou professor por segurança
-                // Para MVP, vamos deixar 'admin' hardcoded para o email que você criou se não tiver staff
-                return 'admin';
+
+                // 2. Se não for staff, tenta buscar na tabela GUARDIANS
+                const { data: guardianData } = await supabase
+                    .from('guardians')
+                    .select('id')
+                    .eq('email', email)
+                    .maybeSingle();
+
+                if (guardianData) {
+                    return 'guardian';
+                }
+
+                // Se não achar, assume admin SOMENTE para o primeiro setup ou devolve null
+                return 'admin'; // CUIDADO: Em prod mudar isso para null
             } catch (err) {
-                return 'teacher';
+                console.error("Erro ao buscar role:", err);
+                return null;
             }
         };
 
