@@ -68,12 +68,13 @@ export default function FinancialChargeForm() {
                     student_id: formData.student_id,
                     guardian_id: payerId,
                     title: formData.title,
-                    description: formData.notes, // Agora mapeia notes para description
+                    description: formData.notes,
                     amount: parseFloat(formData.amount),
                     due_date: formData.due_date,
                     status: 'pending',
-                    type: 'income', // Importante: define como receita
-                    category: 'tuition' // Default category
+                    type: 'income',
+                    category: 'tuition',
+                    payment_method: formData.payment_method_pref // Salva a preferência escolhida
                 });
 
             if (error) throw error;

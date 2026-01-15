@@ -119,3 +119,32 @@ create table if not exists staff (
 -- Policy para Staff
 alter table staff enable row level security;
 create policy "Allow public access" on staff for all using (true);
+
+-- 9. Atualização para Galeria de Fotos (Diário)
+-- Adiciona coluna de foto na tabela de logs diários
+alter table daily_logs add column if not exists photo_url text;
+
+-- Criação do Bucket de Armazenamento (Storage) via SQL
+-- Nota: Em alguns casos, buckets precisam ser criados via Painel UI do Supabase (Storage > New Bucket),
+-- mas a policy abaixo só funciona se o bucket 'activity-photos' existir.
+insert into storage.buckets (id, name, public) 
+values ('activity-photos', 'activity-photos', true)
+on conflict (id) do nothing;
+
+-- Políticas de Segurança do Storage (Quem pode ver e enviar fotos)
+create policy "Qualquer pessoa pode ver fotos"
+on storage.objects for select
+using ( bucket_id = 'activity-photos' );
+
+create policy "Usuários logados podem enviar fotos"
+on storage.objects for insert
+with check ( bucket_id = 'activity-photos' and auth.role() = 'authenticated' );
+
+-- 10. Campos para Integração de Pagamento (Asaas/Gateway)
+-- Adiciona colunas para rastrear ID externo e Link de Pagamento
+alter table financial_records add column if not exists external_id text; -- ID do Boleto no Asaas
+alter table financial_records add column if not exists payment_url text; -- Link do Boleto/Pix
+alter table financial_records add column if not exists payment_method text; -- 'pix', 'boleto', 'credit_card'
+
+-- Índices para busca rápida por ID externo (usado em Webhooks)
+create index if not exists idx_financial_external_id on financial_records(external_id);

@@ -4,19 +4,24 @@ import { LayoutDashboard, Users, Wallet, Bell, LogOut, Sun, BookOpen, Briefcase,
 import { cn } from './lib/utils';
 
 export default function Layout() {
-    const { user, logout } = useAuth();
+    const { user, role, logout } = useAuth();
     const location = useLocation();
 
     const navItems = [
-        { path: '/', icon: LayoutDashboard, label: 'Painel' },
-        { path: '/students', icon: Users, label: 'Alunos' },
-        { path: '/guardians', icon: User, label: 'Responsáveis' },
-        { path: '/classes', icon: BookOpen, label: 'Turmas' },
-        { path: '/staff', icon: Briefcase, label: 'Funcionários' },
-        { path: '/financial', icon: Wallet, label: 'Financeiro' },
-        { path: '/pedagogical', icon: Notebook, label: 'Diário' },
-        { path: '/notices', icon: Bell, label: 'Avisos' },
+        { path: '/', icon: LayoutDashboard, label: 'Painel', roles: ['admin', 'teacher'] },
+        { path: '/students', icon: Users, label: 'Alunos', roles: ['admin', 'teacher'] },
+        { path: '/guardians', icon: User, label: 'Responsáveis', roles: ['admin', 'teacher'] },
+        { path: '/classes', icon: BookOpen, label: 'Turmas', roles: ['admin', 'teacher'] },
+        { path: '/staff', icon: Briefcase, label: 'Funcionários', roles: ['admin'] },
+        { path: '/financial', icon: Wallet, label: 'Financeiro', roles: ['admin'] },
+        { path: '/pedagogical', icon: Notebook, label: 'Diário', roles: ['admin', 'teacher'] },
+        { path: '/notices', icon: Bell, label: 'Avisos', roles: ['admin', 'teacher'] },
     ];
+
+    // Filtra itens baseados no cargo
+    const filteredNavItems = navItems.filter(item =>
+        !item.roles || item.roles.includes(role || 'teacher') // Default to teacher if role not loaded yet
+    );
 
     return (
         <div className="min-h-screen bg-gray-50 flex font-sans">
@@ -29,7 +34,7 @@ export default function Layout() {
 
                 <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
                     <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-2">Menu</p>
-                    {navItems.map((item) => {
+                    {filteredNavItems.map((item) => {
                         const isActive = location.pathname === item.path;
                         return (
                             <Link

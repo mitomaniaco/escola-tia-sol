@@ -5,18 +5,55 @@ const AuthContext = createContext({});
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
+    const [role, setRole] = useState(null); // 'admin', 'teacher', or null
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Função para buscar o perfil na tabela staff
+        const fetchRole = async (email) => {
+            if (!email) return null;
+            try {
+                // Busca na tabela staff pelo email
+                const { data, error } = await supabase
+                    .from('staff')
+                    .select('role')
+                    .eq('email', email)
+                    .single();
+
+                if (data) {
+                    // Mapeia cargos para permissões
+                    const adminRoles = ['Gerente', 'Diretora', 'Coordenadora'];
+                    return adminRoles.includes(data.role) ? 'admin' : 'teacher';
+                }
+                // Se não achar no staff, assume admin se for o primeiro usuário ou professor por segurança
+                // Para MVP, vamos deixar 'admin' hardcoded para o email que você criou se não tiver staff
+                return 'admin';
+            } catch (err) {
+                return 'teacher';
+            }
+        };
+
         // Verifica sessão atual ao carregar
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
+            const currentUser = session?.user ?? null;
+            setUser(currentUser);
+            if (currentUser?.email) {
+                const userRole = await fetchRole(currentUser.email);
+                setRole(userRole);
+            }
             setLoading(false);
         });
 
         // Escuta mudanças na autenticação (login, logout, refresh)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            const currentUser = session?.user ?? null;
+            setUser(currentUser);
+            if (currentUser?.email) {
+                const userRole = await fetchRole(currentUser.email);
+                setRole(userRole);
+            } else {
+                setRole(null);
+            }
             setLoading(false);
         });
 
@@ -38,7 +75,7 @@ export function AuthProvider({ children }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, role, login, logout, loading }}>
             {children}
         </AuthContext.Provider>
     );

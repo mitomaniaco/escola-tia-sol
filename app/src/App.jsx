@@ -29,6 +29,19 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function RequireRole({ children, allowedRoles }) {
+  const { role, loading } = useAuth();
+
+  if (loading) return null; // Or spinner
+
+  if (!allowedRoles.includes(role)) {
+    // Redireciona para dashboard se não tiver permissão
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -49,14 +62,31 @@ function AppRoutes() {
         <Route path="classes" element={<Classes />} />
         <Route path="classes/new" element={<ClassForm />} />
 
-        <Route path="staff" element={<Staff />} />
-        <Route path="staff/new" element={<StaffForm />} />
+        {/* Rotas Protegidas (Admin Only) */}
+        <Route path="staff" element={
+          <RequireRole allowedRoles={['admin']}>
+            <Staff />
+          </RequireRole>
+        } />
+        <Route path="staff/new" element={
+          <RequireRole allowedRoles={['admin']}>
+            <StaffForm />
+          </RequireRole>
+        } />
+
+        <Route path="financial" element={
+          <RequireRole allowedRoles={['admin']}>
+            <Financial />
+          </RequireRole>
+        } />
+        <Route path="financial/new-charge" element={
+          <RequireRole allowedRoles={['admin']}>
+            <FinancialChargeForm />
+          </RequireRole>
+        } />
 
         <Route path="pedagogical" element={<Pedagogical />} />
         <Route path="pedagogical/new-entry" element={<ActivityForm />} />
-
-        <Route path="financial" element={<Financial />} />
-        <Route path="financial/new-charge" element={<FinancialChargeForm />} />
 
         <Route path="notices" element={<Notices />} />
         <Route path="notices/new" element={<NoticeForm />} />

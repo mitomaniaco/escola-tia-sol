@@ -236,61 +236,87 @@ export default function Financial() {
                                 ) : filtered.length === 0 ? (
                                     <tr>
                                         <td colSpan="6" className="p-8 text-center text-gray-500">
-                                            Nenhuma cobrança encontrada.
+                                            Nenhum registro encontrado.
                                         </td>
                                     </tr>
                                 ) : (
-                                    filtered.map(charge => (
-                                        <tr key={charge.id} className="hover:bg-gray-50/50 transition-colors">
+                                    filtered.map(record => (
+                                        <tr key={record.id} className="hover:bg-gray-50/50 transition-colors">
                                             <td className="p-4 font-medium text-gray-900">
-                                                {charge.students?.name || 'Aluno Excluído'}
+                                                {activeTab === 'income'
+                                                    ? (record.students?.name || 'Aluno Excluído')
+                                                    : (record.category || 'Geral')}
                                             </td>
-                                            <td className="p-4 text-gray-600">{charge.title}</td>
-                                            <td className="p-4 text-gray-600">{new Date(charge.due_date).toLocaleDateString()}</td>
-                                            <td className="p-4 font-medium text-gray-900">
-                                                R$ {Number(charge.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            <td className="p-4 text-gray-600">
+                                                <div className="flex flex-col">
+                                                    <span>{record.title}</span>
+                                                    {record.description && <span className="text-xs text-gray-400">{record.description}</span>}
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-gray-600">{new Date(record.due_date).toLocaleDateString()}</td>
+                                            <td className={`p-4 font-medium ${activeTab === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                                {activeTab === 'expense' ? '-' : ''} R$ {Number(record.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </td>
                                             <td className="p-4">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(charge.status)}`}>
-                                                    {getStatusLabel(charge.status)}
+                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(record.status)}`}>
+                                                    {getStatusLabel(record.status)}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    {['pending', 'overdue'].includes(charge.status) ? (
+                                                    {['pending', 'overdue'].includes(record.status) ? (
                                                         <>
+                                                            {activeTab === 'income' && (
+                                                                <>
+                                                                    {record.payment_url ? (
+                                                                        <a
+                                                                            href={record.payment_url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="p-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
+                                                                            title="Pagar Online"
+                                                                        >
+                                                                            <DollarSign size={14} />
+                                                                            Pagar
+                                                                        </a>
+                                                                    ) : (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={() => alert('Em breve: Copia Chave Pix do Asaas/Banco')}
+                                                                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                                                                                title="Copiar Link Pix"
+                                                                            >
+                                                                                <Copy size={16} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => window.open(`https://wa.me/?text=Olá, segue cobrança escolar: ${record.title} - Valor R$ ${record.amount}`, '_blank')}
+                                                                                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100"
+                                                                                title="Enviar por WhatsApp"
+                                                                            >
+                                                                                <MessageCircle size={16} />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </>
+                                                            )}
                                                             <button
-                                                                onClick={() => alert('Em breve: Copia Chave Pix do Asaas/Banco')}
+                                                                onClick={() => handleMarkAsPaid(record.id)}
                                                                 className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
-                                                                title="Copiar Link Pix"
-                                                            >
-                                                                <Copy size={16} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => window.open(`https://wa.me/?text=Olá, segue cobrança escolar: ${charge.title} - Valor R$ ${charge.amount}`, '_blank')}
-                                                                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100"
-                                                                title="Enviar por WhatsApp"
-                                                            >
-                                                                <MessageCircle size={16} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleMarkAsPaid(charge.id)}
-                                                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
-                                                                title="Marcar como Pago (Manual)"
+                                                                title={activeTab === 'income' ? "Marcar como Recebido" : "Marcar como Pago"}
                                                             >
                                                                 <RefreshCw size={16} />
                                                             </button>
                                                             <button
-                                                                onClick={() => handleCancel(charge.id)}
+                                                                onClick={() => handleCancel(record.id)}
                                                                 className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                                                                title="Cancelar Cobrança"
+                                                                title="Cancelar"
                                                             >
                                                                 <X size={16} />
                                                             </button>
                                                         </>
                                                     ) : (
                                                         <span className="text-xs text-gray-400 italic px-2">
-                                                            {charge.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
+                                                            {record.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
                                                         </span>
                                                     )}
                                                 </div>

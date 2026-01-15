@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Calendar, Search, Smile, Utensils, Moon, Loader2, Droplets, Book, Trash2 } from 'lucide-react';
+import { Plus, Calendar, Search, Smile, Utensils, Moon, Loader2, Droplets, Book, Trash2, Camera, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
@@ -9,6 +9,7 @@ export default function Pedagogical() {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ lunch: 0, nap: 0, mood: 'N/A' });
+    const [viewPhoto, setViewPhoto] = useState(null); // URL da foto sendo visualizada
 
     useEffect(() => {
         fetchLogs();
@@ -95,6 +96,16 @@ export default function Pedagogical() {
 
     return (
         <div>
+            {/* Modal de Foto */}
+            {viewPhoto && (
+                <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewPhoto(null)}>
+                    <button className="absolute top-4 right-4 text-white hover:text-gray-300">
+                        <X size={32} />
+                    </button>
+                    <img src={viewPhoto} alt="Atividade" className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" />
+                </div>
+            )}
+
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Diário de Classe</h1>
@@ -198,6 +209,25 @@ export default function Pedagogical() {
                                             </div>
                                         </div>
                                         <p className="text-gray-600 text-sm">{log.description}</p>
+
+                                        {/* Exibição da Foto */}
+                                        {log.photo_url && (
+                                            <div className="mt-3">
+                                                <button
+                                                    onClick={() => setViewPhoto(log.photo_url)}
+                                                    className="relative group/img overflow-hidden rounded-lg border border-gray-200 w-full md:w-48 h-32"
+                                                >
+                                                    <img
+                                                        src={log.photo_url}
+                                                        alt="Registro"
+                                                        className="w-full h-full object-cover transition-transform group-hover/img:scale-105"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-colors flex items-center justify-center">
+                                                        <Camera className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-md" size={24} />
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
